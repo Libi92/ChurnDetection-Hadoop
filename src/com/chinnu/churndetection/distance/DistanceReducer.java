@@ -16,8 +16,9 @@ public class DistanceReducer extends Reducer<IntWritable, DoubleWritable, IntWri
 		double n = 0d;
 		List<Double> vals = new ArrayList<>();
 		for (DoubleWritable val : values) {
-			_d += val.get();
-			vals.add(val.get());
+			double d = val.get(); 
+			_d += d;
+			vals.add(d);
 			n++;
 		}
 		

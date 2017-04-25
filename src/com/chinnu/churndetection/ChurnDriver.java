@@ -100,6 +100,8 @@ public class ChurnDriver {
 						createKMeansInput(conf);
 						
 						runKmeans();
+						
+						runFuzzyKmeans();
 					}
 				}
 			}
@@ -117,6 +119,7 @@ public class ChurnDriver {
 			job.setJarByClass(ChurnDriver.class);
 			job.setMapperClass(mapperClass);
 			job.setReducerClass(reducerClass);
+			job.setCombinerClass(reducerClass);
 
 			job.setOutputKeyClass(outputKeyClass);
 			job.setOutputValueClass(outputValueClass);
@@ -137,6 +140,137 @@ public class ChurnDriver {
 	}
 	
 	private static void runKmeans() {
+		try {
+
+            int iterations = 1;
+            Path convergerPath = new Path(CENTER_CONVERGED);
+            Path centerPath = new Path(KMEANS_CENTROID_FILE);
+            Path nextCenterPath = new Path(KMEANS_CENTROID_DIR + "centers" + (iterations + 1) + ".txt");
+
+            JobConf conf = new JobConf(ChurnDriver.class);
+
+            Path outPath = new Path(KMEANS_OUTPUT_DIR);
+            FileSystem fs = FileSystem.get(conf);
+            if (fs.exists(outPath)) {
+                fs.delete(outPath, true);
+            }
+            if (fs.exists(convergerPath)) {
+                fs.delete(convergerPath, true);
+            }
+            
+            FileStatus[] fss = fs.listStatus(new Path(KMEANS_CENTROID_DIR));
+            for (FileStatus status : fss) {
+                Path path = status.getPath();
+                if (path.toString().contains("centers.txt")) {
+                    continue;
+                }
+                fs.delete(path);
+            }
+
+            conf.setJobName("KMEANS_" + iterations);
+            conf.setMapOutputKeyClass(IntWritable.class);
+            conf.setMapOutputValueClass(Vector.class);
+            conf.setOutputKeyClass(IntWritable.class);
+            conf.setOutputValueClass(Text.class);
+            conf.setMapperClass(KMeansMapper.class);
+            conf.setReducerClass(KMeansReducer.class);
+            conf.setInputFormat(TextInputFormat.class);
+            conf.setOutputFormat(TextOutputFormat.class);
+            conf.set(Constants.CENTER, centerPath.toString());
+            conf.set(Constants.NEXTCENTER, nextCenterPath.toString());
+            conf.setInt(Constants.STARTINDEX, 1);
+            conf.setInt(Constants.ENDINDEX, 4);
+            conf.setInt(Constants.CLASSINDEX, 5);
+
+            Job job = Job.getInstance(conf);
+            FileInputFormat.setInputPaths(job, new Path(KMEANS_INPUT_DIR));
+            FileOutputFormat.setOutputPath(job, new Path(KMEANS_OUTPUT_DIR));
+
+            JobClient.runJob(conf);
+
+            while (true) {
+
+                System.out.println("------CENTERS------");
+
+                BufferedReader br = new BufferedReader(new InputStreamReader(fs.open(nextCenterPath)));
+                String line;
+                line = br.readLine();
+                while (line != null) {
+                    System.out.println(line);
+                    line = br.readLine();
+                }
+                iterations++;
+
+                centerPath = new Path(KMEANS_CENTROID_DIR + "centers" + iterations + ".txt");
+                nextCenterPath = new Path(KMEANS_CENTROID_DIR + "centers" + (iterations + 1) + ".txt");
+
+                conf = new JobConf(ChurnDriver.class);
+
+                outPath = new Path(KMEANS_OUTPUT_DIR);
+                fs = FileSystem.get(conf);
+                if (fs.exists(outPath)) {
+                    fs.delete(outPath, true);
+                }
+
+                conf.setJobName("KMEANS_" + iterations);
+                conf.setMapOutputKeyClass(IntWritable.class);
+                conf.setMapOutputValueClass(Vector.class);
+                conf.setOutputKeyClass(IntWritable.class);
+                conf.setOutputValueClass(Text.class);
+                conf.setMapperClass(KMeansMapper.class);
+                conf.setReducerClass(KMeansReducer.class);
+                conf.setInputFormat(TextInputFormat.class);
+                conf.setOutputFormat(TextOutputFormat.class);
+                conf.set(Constants.CENTER, centerPath.toString());
+                conf.set(Constants.NEXTCENTER, nextCenterPath.toString());
+                conf.setInt(Constants.STARTINDEX, 1);
+                conf.setInt(Constants.ENDINDEX, 4);
+                conf.setInt(Constants.CLASSINDEX, 5);
+
+                Job jobi = Job.getInstance(conf);
+                FileInputFormat.setInputPaths(jobi, new Path(KMEANS_INPUT_DIR));
+                FileOutputFormat.setOutputPath(jobi, new Path(KMEANS_OUTPUT_DIR));
+
+                JobClient.runJob(conf);
+                
+                if(fs.exists(convergerPath)){
+                    break;
+                }
+            }
+
+            fss = fs.listStatus(new Path(KMEANS_OUTPUT_DIR));
+            for (FileStatus status : fss) {
+                Path path = status.getPath();
+                if (path.toString().contains("_SUCCESS")) {
+                    continue;
+                }
+
+                BufferedReader br = new BufferedReader(new InputStreamReader(fs.open(path)));
+                String line;
+                line = br.readLine();
+                while (line != null) {
+                    System.out.println(line);
+                    line = br.readLine();
+                }
+
+            }
+
+            System.out.println("------CENTERS------");
+
+            BufferedReader br = new BufferedReader(new InputStreamReader(fs.open(centerPath)));
+            String line;
+            line = br.readLine();
+            while (line != null) {
+                System.out.println(line);
+                line = br.readLine();
+            }
+
+        } catch (IOException ex) {
+            ex.printStackTrace();
+        }
+	}
+	
+	private static void runFuzzyKmeans() {
 		try {
 
             int iterations = 1;
