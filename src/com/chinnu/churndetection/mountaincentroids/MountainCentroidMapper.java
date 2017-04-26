@@ -20,8 +20,8 @@ import com.chinnu.churndetection.utils.MountainWritable;
 public class MountainCentroidMapper
 		extends Mapper<LongWritable, Text, IntWritable, MountainWritable> {
 
-	private static String INPUT = ChurnDriver.INPUT_DIR + "data.csv";
 	private double T1;
+	private String inputText;
 	
 	@Override
 	protected void setup(Mapper<LongWritable, Text, IntWritable, MountainWritable>.Context context)
@@ -29,6 +29,7 @@ public class MountainCentroidMapper
 		
 		Configuration conf = context.getConfiguration();
 		T1 = conf.getDouble(Constants.T1, 0);
+		inputText = conf.get(Constants.INPUT_TEXT);
 		
 		super.setup(context);
 	}
@@ -42,14 +43,10 @@ public class MountainCentroidMapper
 		int nightCalls = Integer.parseInt(concepts[Constants.NIGHT_CALL_INDEX]);
 		int intrCalls = Integer.parseInt(concepts[Constants.INTR_CALL_INDEX]);
 		
-		Configuration conf = new Configuration();
-		FileSystem fileSystem = FileSystem.get(conf);
-		Path inputPath = new Path(INPUT);
-		BufferedReader bufferedReader = new BufferedReader(new InputStreamReader(fileSystem.open(inputPath)));
-		String inLine;
+		String[] data = inputText.split("\n");
 		
-		
-		while ((inLine = bufferedReader.readLine()) != null) {
+		for(int i = 0; i < data.length; i++) {
+			String inLine = data[i];
 			String[] split = inLine.split(",");
 			
 			int xDayCalls = Integer.parseInt(split[Constants.DAY_CALL_INDEX]);
@@ -66,7 +63,7 @@ public class MountainCentroidMapper
 			
 			double di = Math.sqrt(sum);
 			double denom = Math.pow((T1 / 2), 2);
-			double exp = Math.exp(-(di / denom));
+			double exp = (di / denom);
 
 			IntWritable key = new IntWritable(item);
 			MountainWritable val = new MountainWritable();

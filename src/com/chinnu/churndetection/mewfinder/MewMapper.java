@@ -19,7 +19,18 @@ import com.chinnu.churndetection.utils.Constants;
 
 public class MewMapper extends Mapper<LongWritable, Text, LongWritable, DoubleWritable> {
 	private static String INPUT = ChurnDriver.INPUT_DIR + "data.csv";
-    
+	private String inputText;
+	
+	@Override
+	protected void setup(Mapper<LongWritable, Text, LongWritable, DoubleWritable>.Context context)
+			throws IOException, InterruptedException {
+		
+		Configuration conf = context.getConfiguration();
+		inputText = conf.get(Constants.INPUT_TEXT);
+		
+		super.setup(context);
+	}
+	
 	public void map(LongWritable ikey, Text ivalue, Context context) throws IOException, InterruptedException {
 		String line = ivalue.toString();
 		String[] concepts = line.split(",");
@@ -28,12 +39,6 @@ public class MewMapper extends Mapper<LongWritable, Text, LongWritable, DoubleWr
 		int eveCalls = Integer.parseInt(concepts[Constants.EVE_CALL_INDEX]);
 		int nightCalls = Integer.parseInt(concepts[Constants.NIGHT_CALL_INDEX]);
 		int intrCalls = Integer.parseInt(concepts[Constants.INTR_CALL_INDEX]);
-		
-		Configuration conf = new Configuration();
-		FileSystem fileSystem = FileSystem.get(conf);
-		Path inputPath = new Path(INPUT);
-		BufferedReader bufferedReader = new BufferedReader(new InputStreamReader(fileSystem.open(inputPath)));
-		String inLine;
 		
 		int etahDay = 0;
 		int etahEve = 0;
@@ -45,7 +50,10 @@ public class MewMapper extends Mapper<LongWritable, Text, LongWritable, DoubleWr
 		int mNight = 0;
 		int mIntr = 0;
 		
-		while ((inLine = bufferedReader.readLine()) != null) {
+		String[] data = inputText.split("\n");
+		
+		for(int i = 0; i < data.length; i++) {
+			String inLine = data[i];
 			String[] split = inLine.split(",");
 			
 			int xDayCalls = Integer.parseInt(split[Constants.DAY_CALL_INDEX]);

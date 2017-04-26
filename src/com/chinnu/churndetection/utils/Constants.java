@@ -17,4 +17,5 @@ public class Constants {
     public static final String STARTINDEX = "STARTINDEX";
     public static final String ENDINDEX = "ENDINDEX";
     public static final String CLASSINDEX = "ENDINDEX";
+    public static final String INPUT_TEXT = "INPUT_TEXT";
 }

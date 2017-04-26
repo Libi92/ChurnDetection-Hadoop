@@ -2,6 +2,7 @@ package com.chinnu.churndetection;
 
 import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
@@ -40,6 +41,7 @@ import com.chinnu.churndetection.pi.PiMapper;
 import com.chinnu.churndetection.pi.PiReducer;
 import com.chinnu.churndetection.utils.Constants;
 import com.chinnu.churndetection.utils.MountainModel;
+import com.chinnu.churndetection.utils.MountainWritable;
 import com.chinnu.churndetection.utils.Vector;
 
 public class ChurnDriver {
@@ -68,9 +70,11 @@ public class ChurnDriver {
 		delete_dir(conf, DISTANCE_OUTPUT_DIR);
 		delete_dir(conf, MOUNTAIN_1_OUTPUT_DIR);
 		delete_dir(conf, MOUNTAIN_CENTROID_OUTPUT_DIR);
-						
-		runJob("MewJob", conf, MewMapper.class, MewReducer.class, LongWritable.class, DoubleWritable.class, INPUT_DIR, MEW_OUTPUT_DIR);
-		runJob("PiJob", conf, PiMapper.class, PiReducer.class, IntWritable.class, DoubleWritable.class, MEW_OUTPUT_DIR, PI_OUTPUT_DIR);
+		
+		String inputText = getInputText(conf);
+		conf.set(Constants.INPUT_TEXT, inputText);
+		runJob("MewJob", conf, MewMapper.class, MewReducer.class, LongWritable.class, DoubleWritable.class, INPUT_DIR, MEW_OUTPUT_DIR, false);
+		runJob("PiJob", conf, PiMapper.class, PiReducer.class, IntWritable.class, DoubleWritable.class, MEW_OUTPUT_DIR, PI_OUTPUT_DIR, false);
 		
 		
 		int firstCentroid = getFirstCentroid(conf);
@@ -81,27 +85,27 @@ public class ChurnDriver {
 			System.out.println(X1F);
 			if(X1F != null) {
 				conf.set(Constants.X1F, X1F);
-				runJob("DistanceJob", conf, DistanceMapper.class, DistanceReducer.class, IntWritable.class, DoubleWritable.class, INPUT_DIR, DISTANCE_OUTPUT_DIR);
+				runJob("DistanceJob", conf, DistanceMapper.class, DistanceReducer.class, IntWritable.class, DoubleWritable.class, INPUT_DIR, DISTANCE_OUTPUT_DIR, false);
 				double T1 = getT1(conf);
 				System.out.println("T1 = " + T1);
 				
 				if(T1 != 0){
 					conf.setDouble(Constants.T1, T1);
-					runJob("MountainJob", conf, MountainMapper.class, MountainReducer.class, IntWritable.class, DoubleWritable.class, INPUT_DIR, MOUNTAIN_1_OUTPUT_DIR);
+					runJob("MountainJob", conf, MountainMapper.class, MountainReducer.class, IntWritable.class, DoubleWritable.class, INPUT_DIR, MOUNTAIN_1_OUTPUT_DIR, false);
 					
 					double M1 = getM1(conf);
 					System.out.println("M1 = " + M1);
 					
 					if(M1 != 0) {
 						conf.setDouble(Constants.M1, M1);
-						runJob("MountainCentroidJob", conf, MountainCentroidMapper.class, MountainCentroidReducer.class, IntWritable.class, DoubleWritable.class, INPUT_DIR, MOUNTAIN_CENTROID_OUTPUT_DIR);
+						runJob("MountainCentroidJob", conf, MountainCentroidMapper.class, MountainCentroidReducer.class, IntWritable.class, DoubleWritable.class, INPUT_DIR, MOUNTAIN_CENTROID_OUTPUT_DIR, true);
 						
 						getCentroids(conf, M1);
 						createKMeansInput(conf);
 						
 						runKmeans();
 						
-						runFuzzyKmeans();
+//						runFuzzyKmeans();
 					}
 				}
 			}
@@ -111,7 +115,7 @@ public class ChurnDriver {
 	}
 
 	private static void runJob(String jobName, Configuration conf, Class mapperClass, Class reducerClass,
-			Class outputKeyClass, Class outputValueClass, String inputDir, String outputDir) {
+			Class outputKeyClass, Class outputValueClass, String inputDir, String outputDir, boolean isMountain) {
 
 		try {
 			Job job = Job.getInstance(conf, jobName);
@@ -119,7 +123,10 @@ public class ChurnDriver {
 			job.setJarByClass(ChurnDriver.class);
 			job.setMapperClass(mapperClass);
 			job.setReducerClass(reducerClass);
-			job.setCombinerClass(reducerClass);
+			if(isMountain){
+				job.setMapOutputKeyClass(outputKeyClass);
+				job.setMapOutputValueClass(MountainWritable.class);
+			}
 
 			job.setOutputKeyClass(outputKeyClass);
 			job.setOutputValueClass(outputValueClass);
@@ -181,6 +188,7 @@ public class ChurnDriver {
             conf.setInt(Constants.STARTINDEX, 1);
             conf.setInt(Constants.ENDINDEX, 4);
             conf.setInt(Constants.CLASSINDEX, 5);
+            
 
             Job job = Job.getInstance(conf);
             FileInputFormat.setInputPaths(job, new Path(KMEANS_INPUT_DIR));
@@ -460,8 +468,8 @@ public class ChurnDriver {
 			
 			List<Integer> centroids = new ArrayList<>();
 			for (MountainModel model : mountains) {
-				double mi = 0.6 * model.getMi();
-				if (mi > M1) {
+				double mi = model.getMi();
+				if (mi < M1) {
 					centroids.add(model.getXi());
 				}
 				else{
@@ -582,6 +590,25 @@ public class ChurnDriver {
 				}
 			}
 			return null;
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+		return null;
+	}
+	
+	private static String getInputText(Configuration conf){
+		FileSystem fileSystem;
+		try {
+			String data = "";
+			fileSystem = FileSystem.get(conf);
+			Path inputPath = new Path(INPUT_FILE);
+			BufferedReader br = new BufferedReader(new InputStreamReader(fileSystem.open(inputPath)));
+
+			String line;
+			while ((line = br.readLine()) != null) {
+				data += line + "\n";
+			}
+			return data;
 		} catch (IOException e) {
 			e.printStackTrace();
 		}

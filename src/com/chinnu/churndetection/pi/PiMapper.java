@@ -14,10 +14,13 @@ import org.apache.hadoop.io.Text;
 import org.apache.hadoop.mapreduce.Mapper;
 
 import com.chinnu.churndetection.ChurnDriver;
+import com.chinnu.churndetection.utils.Constants;
 
 public class PiMapper extends Mapper<LongWritable, Text, IntWritable, DoubleWritable> {
 
 	private static String INPUT = ChurnDriver.MEW_OUTPUT_DIR + "part-r-00000";
+	private String inputText;
+	
 	
 	public void map(LongWritable ikey, Text ivalue, Context context) throws IOException, InterruptedException {
 		String value = ivalue.toString();

@@ -57,7 +57,7 @@ public class MountainMapper
 		
 		double di = Math.sqrt(sum);
 		double denom = Math.pow((T1 / 2), 2);
-		double exp = Math.exp(-(di / denom));
+		double exp = (di / denom);
 
 		IntWritable key = new IntWritable(xItem);
 		DoubleWritable val = new DoubleWritable(exp);
