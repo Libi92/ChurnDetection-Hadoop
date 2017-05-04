@@ -8,6 +8,7 @@ package com.chinnu.churndetection.utils;
 import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.apache.hadoop.io.Writable;
@@ -21,8 +22,9 @@ public class Vector implements Writable {
     int Index;
     int dataLength;
     double[] data;
+    double mew = 0;
     String className;
-
+    
     public int getIndex() {
         return Index;
     }
@@ -56,7 +58,15 @@ public class Vector implements Writable {
         this.className = className;
     }
 
-    public static Vector read(DataInput in) throws IOException {
+    public double getMew() {
+		return mew;
+	}
+
+	public void setMew(double mew) {
+		this.mew = mew;
+	}
+
+	public static Vector read(DataInput in) throws IOException {
         Vector v = new Vector();
         v.readFields(in);
         return v;
@@ -72,6 +82,7 @@ public class Vector implements Writable {
                 out.writeDouble(data[i]);
             }
 
+            out.writeDouble(mew);
             out.writeChars(className);
         } catch (IOException ex) {
             Logger.getLogger(Vector.class.getName()).log(Level.SEVERE, null, ex);
@@ -89,6 +100,7 @@ public class Vector implements Writable {
                 data[i] = in.readDouble();
             }
 
+            mew = in.readDouble();
             className = in.readLine();
         } catch (IOException ex) {
             Logger.getLogger(Vector.class.getName()).log(Level.SEVERE, null, ex);
@@ -98,7 +110,7 @@ public class Vector implements Writable {
 
     @Override
     public String toString() {
-        return Index + "," + className;
+        return Index + "\t" + Arrays.toString(data) + "\t" + mew;
     }
 
 }

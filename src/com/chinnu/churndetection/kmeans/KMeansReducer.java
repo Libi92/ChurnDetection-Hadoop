@@ -11,6 +11,7 @@ import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
 import org.apache.hadoop.conf.Configuration;
@@ -19,20 +20,19 @@ import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.IntWritable;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.mapred.JobConf;
-import org.apache.hadoop.mapred.MapReduceBase;
-import org.apache.hadoop.mapred.OutputCollector;
-import org.apache.hadoop.mapred.Reducer;
-import org.apache.hadoop.mapred.Reporter;
+import org.apache.hadoop.mapreduce.Reducer;
 
+import com.chinnu.churndetection.ChurnDriver;
 import com.chinnu.churndetection.utils.Constants;
 import com.chinnu.churndetection.utils.DistanceComparator;
+import com.chinnu.churndetection.utils.MRLogger;
 import com.chinnu.churndetection.utils.Vector;
 
 /**
  *
  * @author libin
  */
-public class KMeansReducer extends MapReduceBase implements Reducer<IntWritable, Vector, IntWritable, Text> {
+public class KMeansReducer extends Reducer<IntWritable, Vector, IntWritable, Text> {
 
     String NEW_CENTER;
     String CURR_CENTER;
@@ -40,29 +40,32 @@ public class KMeansReducer extends MapReduceBase implements Reducer<IntWritable,
     int ENDINDEX;
     int DATALENGTH;
     
-    static String BASEURL = "/user/hue/KMeansMR/";
-    static String CENTER_CONVERGED = BASEURL + "converged.txt";
-
     @Override
-    public void configure(JobConf job) {
-        NEW_CENTER = job.get(Constants.NEXTCENTER);
-        CURR_CENTER = job.get(Constants.CENTER);
-        STARTINDEX = job.getInt(Constants.STARTINDEX, 0);
-        ENDINDEX = job.getInt(Constants.ENDINDEX, 0);
+    protected void setup(Reducer<IntWritable, Vector, IntWritable, Text>.Context context)
+    		throws IOException, InterruptedException {
+    	
+    	Configuration conf = context.getConfiguration();
+    	
+    	NEW_CENTER = conf.get(Constants.NEXTCENTER);
+        CURR_CENTER = conf.get(Constants.CENTER_TEXT);
+        STARTINDEX = conf.getInt(Constants.STARTINDEX, 0);
+        ENDINDEX = conf.getInt(Constants.ENDINDEX, 0);
         DATALENGTH = ENDINDEX - STARTINDEX;
+        
+    	super.setup(context);
     }
 
     @Override
-    public void reduce(IntWritable key, Iterator<Vector> iterator, OutputCollector<IntWritable, Text> outputCollector, Reporter reporter) throws IOException {
-
+    protected void reduce(IntWritable key, Iterable<Vector> values,
+    		Reducer<IntWritable, Vector, IntWritable, Text>.Context context) throws IOException, InterruptedException {
+    	
         double[] sum = new double[DATALENGTH];
         for (int i = 0; i < DATALENGTH; i++) {
             sum[i] = 0;
         }
         
         int count = 0;
-        while (iterator.hasNext()) {
-            Vector vector = iterator.next();
+        for(Vector vector : values){
 
             for (int i = 0; i < DATALENGTH; i++) {
                 sum[i] += vector.getData()[i];
@@ -70,7 +73,7 @@ public class KMeansReducer extends MapReduceBase implements Reducer<IntWritable,
             count++;
 
             Text text = new Text(vector.toString());
-            outputCollector.collect(key, text);
+            context.write(key, text);
         }
 
 
@@ -83,11 +86,11 @@ public class KMeansReducer extends MapReduceBase implements Reducer<IntWritable,
         FileSystem fs = FileSystem.get(conf);
 
         List<double[]> curr_center = new ArrayList<>();
-        BufferedReader br = new BufferedReader(new InputStreamReader(fs.open(new Path(CURR_CENTER))));
-        String line;
         
-        while ((line = br.readLine()) != null) {
-            String[] split = line.split(",");
+        String[] lineSplit = CURR_CENTER.split("\n");
+        for(int j = 0; j < lineSplit.length; j++) {
+        	String line = lineSplit[j];
+        	String[] split = line.split(",");
             double[] temp = new double[split.length];
             for (int i = 0; i < split.length; i++) {
                 temp[i] = Double.parseDouble(split[i]);
@@ -97,8 +100,9 @@ public class KMeansReducer extends MapReduceBase implements Reducer<IntWritable,
 
         List<String> appendLine = new ArrayList<>();
         if (fs.exists(new Path(NEW_CENTER))) {
-            br = new BufferedReader(new InputStreamReader(fs.open(new Path(NEW_CENTER))));
+            BufferedReader br = new BufferedReader(new InputStreamReader(fs.open(new Path(NEW_CENTER))));
             
+            String line;
             while ((line = br.readLine()) != null) {
                 appendLine.add(line);
             }
@@ -110,7 +114,7 @@ public class KMeansReducer extends MapReduceBase implements Reducer<IntWritable,
             pw.flush();
         }
         
-        line = "";
+        String line = "";
         for (int i = 0; i < DATALENGTH; i++) {
             line += newCenter[i] + ",";
         }
@@ -120,9 +124,15 @@ public class KMeansReducer extends MapReduceBase implements Reducer<IntWritable,
         pw.flush();
         pw.close();
         
+        MRLogger.Log(context.getJobName());
+        MRLogger.Log(Arrays.toString(curr_center.get(key.get())));
+        MRLogger.Log(Arrays.toString(newCenter));
+        
         double curr_Distance = DistanceComparator.findDistance(curr_center.get(key.get()), newCenter);
+        MRLogger.Log(curr_Distance + "");
+        
         if(curr_Distance < 0.01){
-            PrintWriter pw1 = new PrintWriter(new OutputStreamWriter(fs.create(new Path(CENTER_CONVERGED), true)));
+            PrintWriter pw1 = new PrintWriter(new OutputStreamWriter(fs.create(new Path(ChurnDriver.CENTER_CONVERGED), true)));
             pw1.println("converged");
             pw1.flush();
             pw1.close();

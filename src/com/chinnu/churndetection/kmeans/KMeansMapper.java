@@ -16,10 +16,9 @@ import org.apache.hadoop.io.IntWritable;
 import org.apache.hadoop.io.LongWritable;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.mapred.JobConf;
-import org.apache.hadoop.mapred.MapReduceBase;
-import org.apache.hadoop.mapred.Mapper;
 import org.apache.hadoop.mapred.OutputCollector;
 import org.apache.hadoop.mapred.Reporter;
+import org.apache.hadoop.mapreduce.Mapper;
 
 import com.chinnu.churndetection.utils.Constants;
 import com.chinnu.churndetection.utils.DistanceComparator;
@@ -30,7 +29,7 @@ import com.chinnu.churndetection.utils.Vector;
  *
  * @author libin
  */
-public class KMeansMapper extends MapReduceBase implements Mapper<LongWritable, Text, IntWritable, Vector> {
+public class KMeansMapper extends Mapper<LongWritable, Text, IntWritable, Vector> {
     
     String CENTERS;
     int STARTINDEX;
@@ -39,26 +38,29 @@ public class KMeansMapper extends MapReduceBase implements Mapper<LongWritable, 
     int DATALENGTH;
 
     @Override
-    public void configure(JobConf job) {
-        CENTERS = job.get(Constants.CENTER);
-        STARTINDEX = job.getInt(Constants.STARTINDEX, 0);
-        ENDINDEX = job.getInt(Constants.ENDINDEX, 0);
-        CLASSINDEX = job.getInt(Constants.CLASSINDEX, 0);
+    protected void setup(Mapper<LongWritable, Text, IntWritable, Vector>.Context context)
+    		throws IOException, InterruptedException {
+    	
+    	Configuration conf = context.getConfiguration();
+    	
+    	CENTERS = conf.get(Constants.CENTER_TEXT);
+        STARTINDEX = conf.getInt(Constants.STARTINDEX, 0);
+        ENDINDEX = conf.getInt(Constants.ENDINDEX, 0);
+        CLASSINDEX = conf.getInt(Constants.CLASSINDEX, 0);
         DATALENGTH = ENDINDEX - STARTINDEX;
+    	super.setup(context);
     }
     
     
     @Override
-    public void map(LongWritable key, Text value, OutputCollector<IntWritable, Vector> outputCollector, Reporter reporter) throws IOException {
-        
-        Configuration conf = new Configuration();
-        FileSystem fs = FileSystem.get(conf);
-        
+    protected void map(LongWritable key, Text value, Mapper<LongWritable, Text, IntWritable, Vector>.Context context)
+    		throws IOException, InterruptedException {
+    	   
         HashMap<Integer, double[]> centers = new HashMap<>();
-        BufferedReader br = new BufferedReader(new InputStreamReader(fs.open(new Path(CENTERS))));
-        String line = br.readLine();
         int idx = 0;
-        while (line != null) {
+        String[] lineSplit = CENTERS.split("\n");
+        for(int j = 0; j < lineSplit.length; j++) {
+        	String line = lineSplit[j];
             double[] center = new double[DATALENGTH];
             String[] split = line.split(",");
             for (int i = 0; i < DATALENGTH; i++) {
@@ -66,11 +68,10 @@ public class KMeansMapper extends MapReduceBase implements Mapper<LongWritable, 
             }
             centers.put(idx++, center);
             
-            line = br.readLine();
         }
 
         
-        line = value.toString();
+        String line = value.toString();
         String[] split = line.split(",");
         double[] data = new double[DATALENGTH];
 
@@ -89,7 +90,7 @@ public class KMeansMapper extends MapReduceBase implements Mapper<LongWritable, 
         int nearCenter = DistanceComparator.findMinimumDistance(data, centers);
         
         IntWritable k = new IntWritable(nearCenter);
-        outputCollector.collect(k, vector);
+        context.write(k, vector);
     }
 
 }

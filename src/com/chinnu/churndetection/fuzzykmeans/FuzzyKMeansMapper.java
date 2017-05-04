@@ -6,8 +6,6 @@
 package com.chinnu.churndetection.fuzzykmeans;
 
 import java.io.BufferedReader;
-import java.io.File;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.util.HashMap;
@@ -18,55 +16,53 @@ import org.apache.hadoop.io.IntWritable;
 import org.apache.hadoop.io.LongWritable;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.mapred.JobConf;
-import org.apache.hadoop.mapred.MapReduceBase;
-import org.apache.hadoop.mapred.Mapper;
 import org.apache.hadoop.mapred.OutputCollector;
 import org.apache.hadoop.mapred.Reporter;
+import org.apache.hadoop.mapreduce.Mapper;
 
 import com.chinnu.churndetection.utils.Constants;
 import com.chinnu.churndetection.utils.DistanceComparator;
+import com.chinnu.churndetection.utils.MRLogger;
 import com.chinnu.churndetection.utils.Vector;
+
 
 /**
  *
  * @author libin
  */
-public class FuzzyKMeansMapper extends MapReduceBase implements Mapper<LongWritable, Text, IntWritable, Vector> {
+public class FuzzyKMeansMapper extends Mapper<LongWritable, Text, IntWritable, Vector> {
     
     String CENTERS;
     int STARTINDEX;
     int ENDINDEX;
     int CLASSINDEX;
     int DATALENGTH;
+    double m = 1.2d;
 
     @Override
-    public void configure(JobConf job) {
-        CENTERS = job.get(Constants.CENTER);
-        STARTINDEX = job.getInt(Constants.STARTINDEX, 0);
-        ENDINDEX = job.getInt(Constants.ENDINDEX, 0);
-        CLASSINDEX = job.getInt(Constants.CLASSINDEX, 0);
+    protected void setup(Mapper<LongWritable, Text, IntWritable, Vector>.Context context)
+    		throws IOException, InterruptedException {
+    	
+    	Configuration conf = context.getConfiguration();
+    	
+    	CENTERS = conf.get(Constants.CENTER_TEXT);
+        STARTINDEX = conf.getInt(Constants.STARTINDEX, 0);
+        ENDINDEX = conf.getInt(Constants.ENDINDEX, 0);
+        CLASSINDEX = conf.getInt(Constants.CLASSINDEX, 0);
         DATALENGTH = ENDINDEX - STARTINDEX;
+    	super.setup(context);
     }
     
     
     @Override
-    public void map(LongWritable key, Text value, OutputCollector<IntWritable, Vector> outputCollector, Reporter reporter) throws IOException {
-        
-        Configuration conf = new Configuration();
-        FileSystem fs = FileSystem.get(conf);
-        
+    protected void map(LongWritable key, Text value, Mapper<LongWritable, Text, IntWritable, Vector>.Context context)
+    		throws IOException, InterruptedException {
+    	   
         HashMap<Integer, double[]> centers = new HashMap<>();
-        BufferedReader br = new BufferedReader(new InputStreamReader(fs.open(new Path(CENTERS))));
-        String line = br.readLine();
         int idx = 0;
-        while (line != null) {
-            
-            File file = new File("/Users/libin/Documents/Projects/kmeansmapreduce/log.txt");
-            FileOutputStream fos = new FileOutputStream(file);
-            fos.write(line.getBytes());
-            fos.flush();
-            fos.close();
-            
+        String[] lineSplit = CENTERS.split("\n");
+        for(int j = 0; j < lineSplit.length; j++) {
+        	String line = lineSplit[j];
             double[] center = new double[DATALENGTH];
             String[] split = line.split(",");
             for (int i = 0; i < DATALENGTH; i++) {
@@ -74,16 +70,26 @@ public class FuzzyKMeansMapper extends MapReduceBase implements Mapper<LongWrita
             }
             centers.put(idx++, center);
             
-            line = br.readLine();
         }
 
         
-        line = value.toString();
+        String line = value.toString();
         String[] split = line.split(",");
         double[] data = new double[DATALENGTH];
 
         for (int i = STARTINDEX; i < ENDINDEX; i++) {
             data[i - STARTINDEX] = Double.parseDouble(split[i]);
+        }
+        
+        
+        double etahSum = 0d;
+        for(Integer cKey : centers.keySet()){
+        	double[] cenetr = centers.get(cKey);
+        	double dist = DistanceComparator.findDistance(cenetr, data);
+        	double inv_dist = 1 / dist;
+        	double pow = 1 / (m - 1);
+        	double etah = Math.pow(inv_dist, pow);
+        	etahSum += etah;
         }
 
         String className = split[CLASSINDEX];
@@ -96,8 +102,18 @@ public class FuzzyKMeansMapper extends MapReduceBase implements Mapper<LongWrita
 
         int nearCenter = DistanceComparator.findMinimumDistance(data, centers);
         
+        double[] cenetr = centers.get(nearCenter);
+    	double dist = DistanceComparator.findDistance(cenetr, data);
+    	double inv_dist = 1 / dist;
+    	double pow = 1 / (m - 1);
+    	double etah = Math.pow(inv_dist, pow);
+    	
+    	double mew = etah / etahSum;
+        vector.setMew(mew);
+        MRLogger.Log("Mew : " + mew);
+    	
         IntWritable k = new IntWritable(nearCenter);
-        outputCollector.collect(k, vector);
+        context.write(k, vector);
     }
 
 }

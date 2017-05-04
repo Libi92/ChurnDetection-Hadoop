@@ -12,6 +12,7 @@ public class Constants {
 	public static String T1 = "T1";
 	public static String M1 = "M1";
 	
+	public static final String CENTER_TEXT = "CENTER_TEXT";
 	public static final String CENTER = "CENTER";
     public static final String NEXTCENTER = "NEXTCENTER";
     public static final String STARTINDEX = "STARTINDEX";
